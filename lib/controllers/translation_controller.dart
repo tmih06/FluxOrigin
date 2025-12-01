@@ -12,13 +12,15 @@ class TranslationController {
 
   /// Processes the file with resume capability.
   /// [onUpdate] callback returns status message and progress (0.0 to 1.0).
-  Future<void> processFile({
+  /// Returns the translated content as a String.
+  Future<String> processFile({
     required String filePath,
-    required String outputDir,
     required String dictionaryDir,
     required Function(String status, double progress) onUpdate,
   }) async {
-    final String progressPath = "$filePath.flux_progress.json";
+    final String fileName = path.basenameWithoutExtension(filePath);
+    final String progressPath =
+        path.join(dictionaryDir, "$fileName.flux_progress.json");
     TranslationProgress? progress =
         await TranslationProgress.loadFromFile(progressPath);
 
@@ -73,9 +75,9 @@ class TranslationController {
       final String glossary = enrichedGlossaryCsv;
 
       // Create output path in outputDir
-      final String ext = path.extension(filePath);
-      final String outputPath =
-          path.join(outputDir, "${fileName}_translated$ext");
+      // Note: In new flow, we don't save automatically, but we keep this field
+      // in TranslationProgress for compatibility or future use.
+      final String outputPath = "";
 
       progress = TranslationProgress(
         sourcePath: filePath,
@@ -127,16 +129,14 @@ class TranslationController {
       }
     }
 
-    final File outFile = File(progress.outputPath);
-    await outFile.writeAsString(finalContent.toString());
-
     // Cleanup progress file
     final File progressFile = File(progressPath);
     if (await progressFile.exists()) {
       await progressFile.delete();
     }
 
-    onUpdate("Hoàn tất! File đã lưu tại: ${progress.outputPath}", 1.0);
+    onUpdate("Dịch hoàn tất!", 1.0);
+    return finalContent.toString();
   }
 
   /// Smart Merge: Merges AI-generated CSV with existing user CSV

@@ -13,10 +13,6 @@ class ConfigProvider extends ChangeNotifier {
 
   bool get isConfigured => _projectPath.isNotEmpty;
 
-  String get inputDir =>
-      _projectPath.isEmpty ? '' : path.join(_projectPath, 'input');
-  String get outputDir =>
-      _projectPath.isEmpty ? '' : path.join(_projectPath, 'output');
   String get dictionaryDir =>
       _projectPath.isEmpty ? '' : path.join(_projectPath, 'dictionary');
 

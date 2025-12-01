@@ -64,12 +64,8 @@ class _PathSetupModalState extends State<PathSetupModal> {
 
     try {
       // Create subdirectories
-      final inputDir = Directory(path.join(projectPath, 'input'));
-      final outputDir = Directory(path.join(projectPath, 'output'));
       final dictionaryDir = Directory(path.join(projectPath, 'dictionary'));
 
-      if (!await inputDir.exists()) await inputDir.create(recursive: true);
-      if (!await outputDir.exists()) await outputDir.create(recursive: true);
       if (!await dictionaryDir.exists())
         await dictionaryDir.create(recursive: true);
 
@@ -170,7 +166,7 @@ class _PathSetupModalState extends State<PathSetupModal> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Hệ thống sẽ tự động tạo các thư mục con (input, output, dictionary) bên trong thư mục này.',
+                          'Hệ thống sẽ tự động tạo thư mục "dictionary" để chứa dữ liệu từ điển.',
                           style: TextStyle(
                             fontSize: 13,
                             color: widget.isDark
