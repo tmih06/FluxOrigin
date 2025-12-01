@@ -1,7 +1,45 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../theme/app_theme.dart';
+
+class HistoryItem {
+  final String fileName;
+  final String timeRange;
+
+  const HistoryItem({
+    required this.fileName,
+    required this.timeRange,
+  });
+}
+
+const List<HistoryItem> MOCK_HISTORY = [
+  HistoryItem(
+    fileName: "Business_Proposal_v2.docx",
+    timeRange: "14:20 - 14:25",
+  ),
+  HistoryItem(
+    fileName: "User_Manual_JP.pdf",
+    timeRange: "10:00 - 10:15",
+  ),
+  HistoryItem(
+    fileName: "Marketing_Strategy_2025.pptx",
+    timeRange: "09:30 - 09:45",
+  ),
+  HistoryItem(
+    fileName: "Financial_Report_Q4.xlsx",
+    timeRange: "16:00 - 16:30",
+  ),
+  HistoryItem(
+    fileName: "Project_Specs_2025.pdf",
+    timeRange: "09:30 - 09:35",
+  ),
+  HistoryItem(
+    fileName: "Meeting_Notes_Dec.txt",
+    timeRange: "11:15 - 11:20",
+  ),
+];
 
 class HistoryScreen extends StatefulWidget {
   final bool isDark;
@@ -13,8 +51,6 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
-  String _filter = 'all'; // 'all' or 'saved'
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -23,61 +59,25 @@ class _HistoryScreenState extends State<HistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Lịch sử dịch thuật',
-                style: GoogleFonts.merriweather(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: widget.isDark ? Colors.white : AppColors.lightPrimary,
-                ),
-              ),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(
-                    color: widget.isDark
-                        ? const Color(0xFF444444)
-                        : Colors.grey[200]!,
-                  ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    _FilterButton(
-                      label: 'Tất cả',
-                      isActive: _filter == 'all',
-                      isDark: widget.isDark,
-                      onTap: () => setState(() => _filter = 'all'),
-                    ),
-                    _FilterButton(
-                      label: 'Đã lưu',
-                      isActive: _filter == 'saved',
-                      isDark: widget.isDark,
-                      onTap: () => setState(() => _filter = 'saved'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Lịch sử dịch thuật',
+            style: GoogleFonts.merriweather(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: widget.isDark ? Colors.white : AppColors.lightPrimary,
+            ),
           ),
 
           const SizedBox(height: 24),
 
-          // Grid of history cards
+          // List of history items
           Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 350,
-                childAspectRatio: 1.5,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-              ),
-              itemCount: 6,
+            child: ListView.separated(
+              itemCount: MOCK_HISTORY.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 12),
               itemBuilder: (context, index) => _HistoryCard(
                 isDark: widget.isDark,
-                index: index,
+                item: MOCK_HISTORY[index],
               ),
             ),
           ),
@@ -87,53 +87,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-class _FilterButton extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  const _FilterButton({
-    required this.label,
-    required this.isActive,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive
-              ? (isDark ? Colors.white : AppColors.lightPrimary)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: isActive
-                ? (isDark ? Colors.black : Colors.white)
-                : (isDark ? Colors.grey[400] : Colors.grey[500]),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _HistoryCard extends StatefulWidget {
   final bool isDark;
-  final int index;
+  final HistoryItem item;
 
   const _HistoryCard({
     required this.isDark,
-    required this.index,
+    required this.item,
   });
 
   @override
@@ -150,7 +110,7 @@ class _HistoryCardState extends State<_HistoryCard> {
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        transform: Matrix4.translationValues(0, _isHovered ? -4 : 0, 0),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: widget.isDark ? AppColors.darkSurface : Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -166,110 +126,58 @@ class _HistoryCardState extends State<_HistoryCard> {
           boxShadow: _isHovered
               ? [
                   BoxShadow(
-                    color: Colors.black.withOpacity(widget.isDark ? 0.3 : 0.1),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(widget.isDark ? 0.3 : 0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
                 ]
               : null,
         ),
-        child: Stack(
+        child: Row(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          border: Border.all(
-                            color: widget.isDark
-                                ? Colors.white.withOpacity(0.3)
-                                : AppColors.lightPrimary.withOpacity(0.3),
-                          ),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          'EN → VI',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: widget.isDark
-                                ? Colors.white
-                                : AppColors.lightPrimary,
-                          ),
-                        ),
-                      ),
-                      Text(
-                        '2 phút trước',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: widget.isDark
-                              ? Colors.grey[500]
-                              : AppColors.lightPrimary.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'FluxOrigin is the sibling app...',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: widget.isDark
-                          ? Colors.grey[300]
-                          : AppColors.lightPrimary,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    height: 1,
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    color: widget.isDark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.black.withOpacity(0.1),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'FluxOrigin là ứng dụng anh em...',
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 2,
-                      style: GoogleFonts.merriweather(
-                        fontSize: 16,
-                        color: widget.isDark
-                            ? Colors.grey[100]
-                            : AppColors.lightPrimary,
-                      ),
-                    ),
-                  ),
-                ],
+            // Icon (Left)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: widget.isDark
+                    ? Colors.white.withOpacity(0.1)
+                    : AppColors.lightPrimary.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: FaIcon(
+                  FontAwesomeIcons.fileLines,
+                  size: 18,
+                  color: widget.isDark ? Colors.white : AppColors.lightPrimary,
+                ),
               ),
             ),
-            if (_isHovered)
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color:
-                        widget.isDark ? Colors.white : AppColors.lightPrimary,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.arrow_forward,
-                    size: 12,
-                    color: widget.isDark ? Colors.black : Colors.white,
-                  ),
-                ).animate().fadeIn(),
+            const SizedBox(width: 16),
+
+            // Filename (Middle - Expanded)
+            Expanded(
+              child: Text(
+                widget.item.fileName,
+                style: GoogleFonts.merriweather(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark ? Colors.white : AppColors.lightPrimary,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
+            ),
+
+            const SizedBox(width: 16),
+
+            // Time Range (Right)
+            Text(
+              widget.item.timeRange,
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+            ),
           ],
         ),
       ),
