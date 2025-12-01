@@ -46,7 +46,7 @@ class AIService {
       {
         "role": "user",
         "content":
-            "Hãy phân tích đoạn văn sau và liệt kê các Tên Riêng (Nhân vật, Địa danh, Môn phái, Chiêu thức) quan trọng nhất để làm Từ Điển dịch thuật.\n\nĐịnh dạng trả về: Chỉ liệt kê dạng text, mỗi từ một dòng: Tên Gốc - Tên Hán Việt.\nVí dụ:\nLi Feng - Lý Phong\nAzure Dragon - Thanh Long\n\nTuyệt đối không giải thích gì thêm.\n\nNội dung:\n$sample"
+            "Hãy phân tích đoạn văn sau và liệt kê các Tên Riêng (Nhân vật, Địa danh, Môn phái, Chiêu thức) quan trọng nhất để làm Từ Điển dịch thuật.\n\nĐịnh dạng trả về: CSV (Original Name,Vietnamese Name)\nTuyệt đối KHÔNG thêm Header.\nNếu tên có dấu phẩy hoặc ký tự đặc biệt, hãy đặt trong dấu ngoặc kép.\n\nVí dụ:\nHarry Potter,Harry Potter\n\"Robert, Jr.\",Robert Con\nAzure Dragon Sect,Thanh Long Môn\nLi Feng,Lý Phong\n\nTuyệt đối không giải thích gì thêm.\n\nNội dung:\n$sample"
       }
     ], options: {
       "num_predict": 3000

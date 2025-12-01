@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:csv/csv.dart';
 import 'package:path/path.dart' as path;
 import '../models/translation_progress.dart';
 import '../services/ai_service.dart';
@@ -40,17 +41,27 @@ class TranslationController {
       final String systemPrompt = await _aiService.detectGenre(sample);
 
       onUpdate("AI đang tạo từ điển tên riêng...", 0.3);
-      final String glossary = await _aiService.generateGlossary(sample);
+      final String glossaryCsv = await _aiService.generateGlossary(sample);
 
-      // Save glossary to dictionaryDir
+      // Smart Merge: Merge AI glossary with existing user CSV
+      final glossaryFile =
+          File(path.join(dictionaryDir, "${fileName}_glossary.csv"));
+
       try {
-        final glossaryFile =
-            File(path.join(dictionaryDir, "${fileName}_glossary.txt"));
-        await glossaryFile.writeAsString(glossary);
+        final String mergedCsv = await _smartMergeGlossary(
+          aiGeneratedCsv: glossaryCsv,
+          existingFile: glossaryFile,
+        );
+
+        // Save merged glossary as CSV
+        await glossaryFile.writeAsString(mergedCsv);
       } catch (e) {
         print("Error saving glossary: $e");
         // Non-critical error, continue
       }
+
+      // Prepare glossary for translation (convert CSV to prompt format)
+      final String glossary = _convertCsvToPromptFormat(glossaryCsv);
 
       // Create output path in outputDir
       final String ext = path.extension(filePath);
@@ -117,5 +128,96 @@ class TranslationController {
     }
 
     onUpdate("Hoàn tất! File đã lưu tại: ${progress.outputPath}", 1.0);
+  }
+
+  /// Smart Merge: Merges AI-generated CSV with existing user CSV
+  /// Keeps user edits, adds new AI entries
+  Future<String> _smartMergeGlossary({
+    required String aiGeneratedCsv,
+    required File existingFile,
+  }) async {
+    // Parse AI-generated CSV
+    final List<List<dynamic>> aiRows = const CsvToListConverter().convert(
+      aiGeneratedCsv,
+      eol: '\n',
+      shouldParseNumbers: false,
+    );
+
+    // Create a map from AI data: Original Name -> Vietnamese Name
+    final Map<String, String> aiMap = {};
+    for (final row in aiRows) {
+      if (row.length >= 2) {
+        final original = row[0].toString().trim();
+        final vietnamese = row[1].toString().trim();
+        if (original.isNotEmpty) {
+          aiMap[original] = vietnamese;
+        }
+      }
+    }
+
+    // If existing file exists, load and preserve user edits
+    if (await existingFile.exists()) {
+      final String existingContent = await existingFile.readAsString();
+      final List<List<dynamic>> existingRows =
+          const CsvToListConverter().convert(
+        existingContent,
+        eol: '\n',
+        shouldParseNumbers: false,
+      );
+
+      // User edits take priority
+      final Map<String, String> userMap = {};
+      for (final row in existingRows) {
+        if (row.length >= 2) {
+          final original = row[0].toString().trim();
+          final vietnamese = row[1].toString().trim();
+          if (original.isNotEmpty) {
+            userMap[original] = vietnamese;
+          }
+        }
+      }
+
+      // Merge: User edits + New AI entries
+      final Map<String, String> mergedMap = {...aiMap};
+      mergedMap.addAll(userMap); // User edits override AI
+
+      // Convert back to CSV
+      final List<List<String>> csvData =
+          mergedMap.entries.map((e) => [e.key, e.value]).toList();
+
+      return const ListToCsvConverter().convert(csvData, eol: '\n');
+    } else {
+      // No existing file, use AI-generated CSV as-is
+      final List<List<String>> csvData =
+          aiMap.entries.map((e) => [e.key, e.value]).toList();
+
+      return const ListToCsvConverter().convert(csvData, eol: '\n');
+    }
+  }
+
+  /// Converts CSV format to readable prompt format for translation
+  String _convertCsvToPromptFormat(String csvContent) {
+    try {
+      final List<List<dynamic>> rows = const CsvToListConverter().convert(
+        csvContent,
+        eol: '\n',
+        shouldParseNumbers: false,
+      );
+
+      final StringBuffer buffer = StringBuffer();
+      for (final row in rows) {
+        if (row.length >= 2) {
+          final original = row[0].toString().trim();
+          final vietnamese = row[1].toString().trim();
+          if (original.isNotEmpty && vietnamese.isNotEmpty) {
+            buffer.writeln("$original -> $vietnamese");
+          }
+        }
+      }
+      return buffer.toString().trim();
+    } catch (e) {
+      // Fallback: return as-is if CSV parsing fails
+      return csvContent;
+    }
   }
 }
