@@ -28,9 +28,11 @@ class TranslationController {
 
   /// Check if a progress file exists for the given document
   /// Returns progress percentage (0.0 to 1.0) if exists, null otherwise
-  Future<double?> getProgressPercentage(String filePath, String dictionaryDir) async {
+  Future<double?> getProgressPercentage(
+      String filePath, String dictionaryDir) async {
     final String fileName = path.basenameWithoutExtension(filePath);
-    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final String progressPath =
+        path.join(dictionaryDir, "$fileName.flux_progress.json");
     final progress = await TranslationProgress.loadFromFile(progressPath);
     if (progress == null) return null;
     if (progress.rawChunks.isEmpty) return null;
@@ -40,7 +42,8 @@ class TranslationController {
   /// Check if a progress file exists for the given document
   Future<bool> hasProgress(String filePath, String dictionaryDir) async {
     final String fileName = path.basenameWithoutExtension(filePath);
-    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final String progressPath =
+        path.join(dictionaryDir, "$fileName.flux_progress.json");
     final File progressFile = File(progressPath);
     return await progressFile.exists();
   }
@@ -48,7 +51,8 @@ class TranslationController {
   /// Delete progress file for the given document
   Future<void> deleteProgress(String filePath, String dictionaryDir) async {
     final String fileName = path.basenameWithoutExtension(filePath);
-    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final String progressPath =
+        path.join(dictionaryDir, "$fileName.flux_progress.json");
     final File progressFile = File(progressPath);
     if (await progressFile.exists()) {
       await progressFile.delete();
@@ -81,7 +85,7 @@ class TranslationController {
 
     // --- 1. INITIALIZATION OR RESUME ---
     if (progress != null && resume) {
-      onUpdate("Đã tìm thấy bản lưu cũ. Đang khôi phục tiến độ...", 
+      onUpdate("Đã tìm thấy bản lưu cũ. Đang khôi phục tiến độ...",
           progress.currentIndex / progress.rawChunks.length);
       await Future.delayed(const Duration(seconds: 1)); // UX delay
     } else {
@@ -94,7 +98,7 @@ class TranslationController {
         progress = null;
       }
       onUpdate("Đang đọc file gốc...", 0.0);
-      
+
       // Extract text content based on file type (TXT or EPUB)
       // Use compute() for heavy EPUB parsing to avoid blocking UI
       final String content = await compute(_extractTextInIsolate, filePath);
@@ -114,8 +118,8 @@ class TranslationController {
           _aiService.getSystemPrompt(genreKey, sourceLanguage, targetLanguage);
 
       onUpdate("AI đang tạo từ điển tên riêng...", 0.3);
-      final String glossaryCsv =
-          await _aiService.generateGlossary(sample, modelName, sourceLanguage, genreKey);
+      final String glossaryCsv = await _aiService.generateGlossary(
+          sample, modelName, sourceLanguage, genreKey);
 
       // Smart Merge: Merge AI glossary with existing user CSV
       final glossaryFile =
@@ -294,6 +298,9 @@ class TranslationController {
 
   /// Smart Merge: Merges AI-generated CSV with existing user CSV
   /// Keeps user edits, adds new AI entries
+  /// Smart Merge: Merges AI-generated CSV with existing user CSV
+  /// Keeps user edits, adds new AI entries
+  /// Preserves 3 columns: Original, Vietnamese, Definition
   Future<String> _smartMergeGlossary({
     required String aiGeneratedCsv,
     required File existingFile,
@@ -308,17 +315,17 @@ class TranslationController {
       );
     } catch (e) {
       print("Error parsing AI glossary CSV: $e");
-      // Treat as empty if parsing fails
     }
 
-    // Create a map from AI data: Original Name -> Vietnamese Name
-    final Map<String, String> aiMap = {};
+    // Create a map from AI data: Original Name -> [Vietnamese Name, Definition]
+    final Map<String, List<String>> aiMap = {};
     for (final row in aiRows) {
       if (row.length >= 2) {
         final original = row[0].toString().trim();
         final vietnamese = row[1].toString().trim();
+        final definition = row.length > 2 ? row[2].toString().trim() : "";
         if (original.isNotEmpty) {
-          aiMap[original] = vietnamese;
+          aiMap[original] = [vietnamese, definition];
         }
       }
     }
@@ -335,36 +342,37 @@ class TranslationController {
         );
       } catch (e) {
         print("Error parsing existing glossary CSV: $e");
-        // If existing file is corrupt, we might want to backup and start fresh,
-        // or just proceed with AI map. For now, let's proceed with AI map
-        // but try to preserve what we can if it was partial.
       }
 
       // User edits take priority
-      final Map<String, String> userMap = {};
+      final Map<String, List<String>> userMap = {};
       for (final row in existingRows) {
         if (row.length >= 2) {
           final original = row[0].toString().trim();
           final vietnamese = row[1].toString().trim();
+          final definition = row.length > 2 ? row[2].toString().trim() : "";
           if (original.isNotEmpty) {
-            userMap[original] = vietnamese;
+            userMap[original] = [vietnamese, definition];
           }
         }
       }
 
       // Merge: User edits + New AI entries
-      final Map<String, String> mergedMap = {...aiMap};
-      mergedMap.addAll(userMap); // User edits override AI
+      // Start with AI map, then overwrite with User map
+      final Map<String, List<String>> mergedMap = {...aiMap};
+      mergedMap.addAll(userMap);
 
       // Convert back to CSV
-      final List<List<String>> csvData =
-          mergedMap.entries.map((e) => [e.key, e.value]).toList();
+      final List<List<String>> csvData = mergedMap.entries.map((e) {
+        return [e.key, e.value[0], e.value[1]];
+      }).toList();
 
       return const ListToCsvConverter().convert(csvData, eol: '\n');
     } else {
-      // No existing file, use AI-generated CSV as-is
-      final List<List<String>> csvData =
-          aiMap.entries.map((e) => [e.key, e.value]).toList();
+      // No existing file, use AI-generated CSV but ensure 3 columns structure
+      final List<List<String>> csvData = aiMap.entries.map((e) {
+        return [e.key, e.value[0], e.value[1]];
+      }).toList();
 
       return const ListToCsvConverter().convert(csvData, eol: '\n');
     }
@@ -409,7 +417,8 @@ class TranslationController {
 
           final String? result = await _webSearchService.lookupTerm(original);
           if (result != null) {
-            row[2] = result;
+            row[2] =
+                result; // ListToCsvConverter will handle escaping quotes/commas
             isModified = true;
           }
 
@@ -418,6 +427,7 @@ class TranslationController {
         }
       }
 
+      // Always convert back to ensure consistent 3-column format and proper escaping
       final String newCsv = const ListToCsvConverter().convert(rows, eol: '\n');
 
       if (isModified) {

@@ -45,21 +45,22 @@ class AIService {
     if (sourceLang == 'Tiếng Trung' && targetLang == 'Tiếng Việt') {
       return _prompts[genre] ?? _prompts['KHAC']!;
     }
-    
+
     // Các trường hợp khác: Prompt chung
     return "You are a professional translator translating from $sourceLang to $targetLang. Translate the text naturally and fluently while preserving the original meaning and tone.";
   }
 
-  Future<String> generateGlossary(String sample, String modelName, String sourceLanguage, String genre) async {
+  Future<String> generateGlossary(String sample, String modelName,
+      String sourceLanguage, String genre) async {
+    // Prompt khác nhau tùy theo ngôn ngữ nguồn và thể loại
     // Prompt khác nhau tùy theo ngôn ngữ nguồn và thể loại
     String promptContent;
-    if (sourceLanguage == 'Tiếng Trung') {
-      // Kiểm tra thể loại: Kiếm Hiệp/Ngôn Tình vs Khoa học/Kỹ thuật/Hiện đại
-      bool isWuxia = genre == 'KIEMHIEP' || genre == 'NGONTINH';
-      
-      if (isWuxia) {
-        // === PROMPT CHO KIẾM HIỆP / NGÔN TÌNH (GIỮ NGUYÊN CŨ) ===
-        promptContent = """NHIỆM VỤ: Phân tích văn bản Tiếng Trung và trích xuất các Tên Riêng (Nhân vật, Địa danh, Môn phái, Chiêu thức) để tạo từ điển Hán Việt.
+    bool isWuxia = genre == 'KIEMHIEP' || genre == 'NGONTINH';
+
+    if (sourceLanguage == 'Tiếng Trung' && isWuxia) {
+      // === PROMPT CHO KIẾM HIỆP / NGÔN TÌNH (GIỮ NGUYÊN CŨ) ===
+      promptContent =
+          """NHIỆM VỤ: Phân tích văn bản Tiếng Trung và trích xuất các Tên Riêng (Nhân vật, Địa danh, Môn phái, Chiêu thức) để tạo từ điển Hán Việt.
 
 QUY TẮC BẮT BUỘC (TUÂN THỦ TUYỆT ĐỐI):
 1. ĐỊNH DẠNG OUTPUT: Chỉ trả về CSV 2 cột: `Từ gốc Trung,Hán Việt`. Không thêm STT, không thêm giải thích.
@@ -73,60 +74,28 @@ QUY TẮC BẮT BUỘC (TUÂN THỦ TUYỆT ĐỐI):
 
 Văn bản:
 $sample""";
-      } else {
-        // === PROMPT CHO KHOA HỌC / KỸ THUẬT / HIỆN ĐẠI (MỚI) ===
-        promptContent = """NHIỆM VỤ: Trích xuất thuật ngữ chuyên ngành (Technical Terms) và Tên riêng từ văn bản Tiếng Trung.
+    } else {
+      // === PROMPT MỚI CHO: TIẾNG ANH, KHOA HỌC, KỸ THUẬT, ĐỜI SỐNG, TIẾNG TRUNG (CHUYÊN NGÀNH) ===
+      promptContent = """
+NHIỆM VỤ: Trích xuất thuật ngữ chuyên ngành và Tên riêng để tạo từ điển.
 
-QUY TẮC QUAN TRỌNG:
-1. ĐẦU RA CSV: `Từ gốc,Tiếng Việt`. Không thêm STT, không thêm giải thích.
-2. THUẬT NGỮ CÔNG NGHỆ/KHOA HỌC:
-   - GIỮ NGUYÊN các từ viết tắt tiếng Anh (LLM, LoRA, AI, GPU, PC, API, CPU, RAM, VRAM...). KHÔNG phiên âm (Ví dụ: Không dịch LoRA thành La Lạp).
-   - Các thuật ngữ kỹ thuật nên dịch sang tiếng Việt hiện đại (Ví dụ: "微调" -> "Tinh chỉnh", "显存" -> "VRAM/Bộ nhớ đồ họa", "模型" -> "Mô hình").
-3. KHÔNG dùng từ Hán Việt cổ trang (Không dịch "Teacher" là "Sư phụ" trong bối cảnh trường học hiện đại, dùng "Giáo viên").
-4. Định nghĩa (Definition) nếu có hãy để ở cột 3.
+YÊU CẦU ĐẦU RA NGHIÊM NGẶT:
+1. CHỈ TRẢ VỀ CSV 2 CỘT: `Từ gốc,Nghĩa Tiếng Việt`.
+2. TUYỆT ĐỐI KHÔNG có cột thứ 3 (Không giải thích, không định nghĩa).
+3. KHÔNG có dòng tiêu đề (Header).
+4. KHÔNG có dấu chấm câu thừa ở cuối dòng.
+5. QUY TẮC DỊCH (Cột 2):
+   - Thuật ngữ quốc tế (AI, CEO, MRI, LoRA...): GIỮ NGUYÊN tiếng Anh.
+   - Thuật ngữ thường: Dịch sang tiếng Việt hiện đại.
+   - KHÔNG dùng từ Hán Việt cổ cho văn bản khoa học.
 
 Văn bản:
-$sample""";
-      }
-    } else if (sourceLanguage == 'Tiếng Anh') {
-      promptContent = """TASK: Extract Technical Terms and Proper Nouns from the English text below.
-
-STRICT OUTPUT FORMAT (CSV - EXACTLY 2 COLUMNS):
-Original Term,Vietnamese Translation
-
-RULES:
-1. Output ONLY 2 columns: `Original Term,Vietnamese Translation`. NO Definition column. NO extra columns.
-2. Keep English acronyms and technical terms as-is (Blockchain, AI, Node, API, CPU, GPU, LLM...).
-3. Translate descriptive terms naturally (e.g., "Decentralization" -> "Phi tập trung").
-4. Keep Western names as-is (e.g., "Satoshi Nakamoto" -> "Satoshi Nakamoto").
-5. Do NOT add Header row. Do NOT add numbering. Do NOT explain anything.
-
-EXAMPLE OUTPUT:
-Blockchain,Blockchain
-Decentralization,Phi tập trung
-Smart Contract,Hợp đồng thông minh
-Satoshi Nakamoto,Satoshi Nakamoto
-
-Text:
-$sample""";
-    } else {
-      promptContent = """Analyze the text and list important Proper Nouns (Names, Places, Organizations). Output CSV with two columns: Original Term, Vietnamese Translation.
-
-Example format:
-Term1,Translation1
-Term2,Translation2
-
-Do NOT add Header. Do NOT explain anything.
-
-Text:
-$sample""";
+$sample
+""";
     }
 
     final response = await chatCompletion(modelName: modelName, messages: [
-      {
-        "role": "user",
-        "content": promptContent
-      }
+      {"role": "user", "content": promptContent}
     ], options: {
       "num_predict": 3000
     });
@@ -135,61 +104,83 @@ $sample""";
     final StringBuffer cleanBuffer = StringBuffer();
 
     for (final line in lines) {
-      final trimmed = line.trim();
-      if (trimmed.isEmpty) continue;
+      // 1. Xóa các dòng Header nếu AI lỡ sinh ra
+      lines.removeWhere((line) {
+        final lower = line.toLowerCase().trim();
+        return lower.startsWith('original') ||
+            lower.startsWith('term') ||
+            lower.startsWith('từ gốc') ||
+            lower.startsWith('----');
+      });
 
-      final lower = trimmed.toLowerCase();
-      if (lower.startsWith("sure") ||
-          lower.startsWith("here") ||
-          lower.startsWith("certainly") ||
-          lower.startsWith("okay") ||
-          lower.startsWith("note") ||
-          lower.startsWith("of course") ||
-          lower.contains("i can help") ||
-          lower.contains("ai language model")) {
-        continue;
-      }
+      for (var i = 0; i < lines.length; i++) {
+        String line = lines[i].trim();
+        if (line.isEmpty) continue;
 
-      if (trimmed.endsWith(':') &&
-          !trimmed.contains(',') &&
-          !trimmed.contains('-')) {
-        continue;
-      }
-
-      String? original;
-      String? vietnamese;
-      String? definition;
-
-      if (trimmed.contains(',')) {
-        final parts = trimmed.split(',');
-        if (parts.length >= 2) {
-          original = parts[0].trim();
-          vietnamese = parts[1].trim();
-          if (parts.length > 2) definition = parts.sublist(2).join(',').trim();
+        // 2. Xử lý dấu phẩy cuối dòng nếu có (ví dụ: "Term,Viet,")
+        if (line.endsWith(',')) {
+          line = line.substring(0, line.length - 1).trim();
         }
-      } else if (trimmed.contains(':')) {
-        final parts = trimmed.split(':');
-        if (parts.length >= 2) {
-          original = parts[0].trim();
-          vietnamese = parts[1].trim();
-          if (parts.length > 2) definition = parts.sublist(2).join(':').trim();
-        }
-      } else if (trimmed.contains('-')) {
-        final parts = trimmed.split('-');
-        if (parts.length >= 2) {
-          original = parts[0].trim();
-          vietnamese = parts[1].trim();
-          if (parts.length > 2) definition = parts.sublist(2).join('-').trim();
-        }
-      }
 
-      if (original != null &&
-          vietnamese != null &&
-          original.isNotEmpty &&
-          vietnamese.isNotEmpty) {
-        if (vietnamese.length > 100) continue;
-        cleanBuffer.writeln(
-            '"$original","$vietnamese"${definition != null ? ',"$definition"' : ''}');
+        String? original;
+        String? vietnamese;
+
+        // 3. Ưu tiên dùng thư viện CSV để parse cho chuẩn
+        try {
+          List<List<dynamic>> rows = const CsvToListConverter()
+              .convert(line, shouldParseNumbers: false);
+          if (rows.isNotEmpty && rows[0].isNotEmpty) {
+            final row = rows[0];
+            if (row.length >= 2) {
+              original = row[0].toString().trim();
+              vietnamese = row[1].toString().trim();
+            } else if (row.length == 1 && line.contains(',')) {
+              // Fallback: CSV parser có thể fail nếu quote không đóng, thử split thủ công
+              final parts = line.split(',');
+              if (parts.length >= 2) {
+                original = parts[0].trim();
+                vietnamese = parts.sublist(1).join(',').trim();
+              }
+            }
+          }
+        } catch (e) {
+          // Fallback nếu CSV parser lỗi
+        }
+
+        // 4. Nếu CSV parser không ra, thử split thủ công thông minh
+        if (original == null || vietnamese == null) {
+          if (line.contains(':')) {
+            final parts = line.split(':');
+            if (parts.length >= 2) {
+              original = parts[0].trim();
+              vietnamese = parts.sublist(1).join(':').trim();
+            }
+          } else if (line.contains('-')) {
+            // Chỉ split bằng '-' nếu không phải là từ ghép (ví dụ: "Sino-Vietnamese")
+            // Logic đơn giản: split ở dấu gạch ngang đầu tiên có khoảng trắng bao quanh hoặc là dấu gạch ngang duy nhất
+            if (line.contains(' - ')) {
+              final parts = line.split(' - ');
+              if (parts.length >= 2) {
+                original = parts[0].trim();
+                vietnamese = parts.sublist(1).join(' - ').trim();
+              }
+            } else {
+              final parts = line.split('-');
+              if (parts.length >= 2) {
+                original = parts[0].trim();
+                vietnamese = parts.sublist(1).join('-').trim();
+              }
+            }
+          }
+        }
+
+        if (original != null &&
+            vietnamese != null &&
+            original.isNotEmpty &&
+            vietnamese.isNotEmpty) {
+          if (vietnamese.length > 100) continue;
+          cleanBuffer.writeln('"$original","$vietnamese"');
+        }
       }
     }
 
@@ -214,7 +205,7 @@ $sample""";
     if (targetLanguage == 'Tiếng Việt') {
       // Kiểm tra thể loại để áp dụng quy tắc phù hợp
       bool isWuxia = genre == 'KIEMHIEP' || genre == 'NGONTINH';
-      
+
       if (isWuxia) {
         // === CONSTRAINTS CHO KIẾM HIỆP / NGÔN TÌNH ===
         constraints = """
@@ -248,7 +239,7 @@ CRITICAL OUTPUT RULES:
       contextInstruction = """
 ### CONTEXT FROM PREVIOUS SECTION:
 The following is the ending of the previous translated section for continuity reference:
-\"$previousContext\"
+"${previousContext}"
 
 Use this context to maintain narrative flow, consistent pronouns, and proper subject references. Do NOT re-translate the context - only translate the new text below.
 
@@ -333,8 +324,8 @@ Use this context to maintain narrative flow, consistent pronouns, and proper sub
   bool _isGarbageOutput(String text) {
     if (text.isEmpty) return true;
 
-    final contentOnly = text.replaceAll(
-        RegExp(r'[\s\p{P}\p{S}]+', unicode: true), '');
+    final contentOnly =
+        text.replaceAll(RegExp(r'[\s\p{P}\p{S}]+', unicode: true), '');
 
     if (contentOnly.isEmpty) return true;
     if (contentOnly.length < 3 && text.length > 10) return true;
@@ -382,7 +373,7 @@ Use this context to maintain narrative flow, consistent pronouns, and proper sub
     // Remove Hallucinated Symbol Sequences - filter out lines that are ONLY punctuation
     final lines = clean.split('\n');
     final cleanedLines = <String>[];
-    final punctOnlyPattern = RegExp(r'^[\s.,;:!?\-"' "'" r'()\[\]{}]+' + r'$');
+    final punctOnlyPattern = RegExp(r'^[\s.,;:!?\-"' "'" r'()\[\]{}]+' r'$');
     for (final line in lines) {
       final trimmedLine = line.trim();
       if (trimmedLine.isEmpty) continue;
@@ -428,7 +419,8 @@ Use this context to maintain narrative flow, consistent pronouns, and proper sub
       clean = clean.replaceAll(RegExp(r'^\s*[,.:;]+\s*', multiLine: true), '');
 
       // Remove trailing orphan punctuation
-      clean = clean.replaceAll(RegExp(r'\s+[,.:;]+\s*' + r'$', multiLine: true), '');
+      clean = clean.replaceAll(
+          RegExp(r'\s+[,.:;]+\s*' r'$', multiLine: true), '');
     }
 
     // Final cleanup: Fix double/multiple spaces
@@ -447,9 +439,10 @@ Use this context to maintain narrative flow, consistent pronouns, and proper sub
 
       // LAYER 1: Strict Model Parameters to prevent hallucinations
       final Map<String, dynamic> defaultOptions = {
-        "temperature": 0.2,      // Low creativity, high accuracy - kills hallucinations
-        "num_predict": 2048,     // Prevents cut-off sentences
-        "repeat_penalty": 1.2,   // Prevents loops like "rừngispereming" or ",,,"
+        "temperature":
+            0.2, // Low creativity, high accuracy - kills hallucinations
+        "num_predict": 2048, // Prevents cut-off sentences
+        "repeat_penalty": 1.2, // Prevents loops like "rừngispereming" or ",,,"
       };
 
       // Merge caller options with defaults (caller options take precedence)
