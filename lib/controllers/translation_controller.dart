@@ -12,6 +12,7 @@ class TranslationController {
 
   /// Processes the file with resume capability.
   /// [onUpdate] callback returns status message and progress (0.0 to 1.0).
+  /// [allowInternet] controls whether web search (RAG) is used for glossary enrichment.
   /// Returns the translated content as a String.
   Future<String> processFile({
     required String filePath,
@@ -19,6 +20,7 @@ class TranslationController {
     required String modelName,
     required String targetLanguage,
     required Function(String status, double progress) onUpdate,
+    required bool allowInternet,
   }) async {
     final String fileName = path.basenameWithoutExtension(filePath);
     final String progressPath =
@@ -70,15 +72,18 @@ class TranslationController {
         // Non-critical error, continue
       }
 
-      // Enrich Glossary: Lookup definitions
-      onUpdate("Đang tra cứu thuật ngữ (RAG)...", 0.35);
-      final String enrichedGlossaryCsv = await _enrichGlossary(
-        glossaryFile: glossaryFile,
-        onUpdate: onUpdate,
-      );
-
-      // Prepare glossary for translation (Pass CSV directly to AIService)
-      final String glossary = enrichedGlossaryCsv;
+      // Enrich Glossary: Lookup definitions (only if Internet is allowed)
+      String glossary;
+      if (allowInternet) {
+        onUpdate("Đang tra cứu thuật ngữ (RAG)...", 0.35);
+        glossary = await _enrichGlossary(
+          glossaryFile: glossaryFile,
+          onUpdate: onUpdate,
+        );
+      } else {
+        onUpdate("Chế độ cục bộ - bỏ qua tra cứu Internet...", 0.35);
+        glossary = await glossaryFile.readAsString();
+      }
 
       // Create output path in outputDir
       // Note: In new flow, we don't save automatically, but we keep this field

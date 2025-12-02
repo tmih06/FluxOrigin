@@ -23,7 +23,6 @@ class TranslateScreen extends StatefulWidget {
 }
 
 class _TranslateScreenState extends State<TranslateScreen> {
-  String _mode = 'document'; // 'document' or 'specialized'
   String _sourceLang = 'Tiếng Anh';
   String _targetLang = 'Tiếng Việt';
   bool _useCustomDict = true;
@@ -97,12 +96,17 @@ class _TranslateScreenState extends State<TranslateScreen> {
       _statusMessage = "Đang khởi tạo...";
     });
 
+    // Switch ON = Local Mode (Offline) -> allowInternet: false
+    // Switch OFF = Internet Mode (Online) -> allowInternet: true
+    final bool allowInternet = !_useCustomDict;
+
     try {
       final result = await _controller.processFile(
         filePath: _selectedFilePath!,
         dictionaryDir: configProvider.dictionaryDir,
         modelName: configProvider.selectedModel,
         targetLanguage: _targetLang,
+        allowInternet: allowInternet,
         onUpdate: (status, progress) {
           if (mounted) {
             setState(() {
@@ -215,40 +219,6 @@ class _TranslateScreenState extends State<TranslateScreen> {
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          // Mode Toggle
-          Center(
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: widget.isDark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : const Color(0xFFE8E4D9),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ModeButton(
-                    icon: FontAwesomeIcons.file,
-                    label: 'Tài liệu',
-                    isActive: _mode == 'document',
-                    isDark: widget.isDark,
-                    onTap: () => setState(() => _mode = 'document'),
-                  ),
-                  _ModeButton(
-                    icon: FontAwesomeIcons.briefcase,
-                    label: 'Chuyên ngành',
-                    isActive: _mode == 'specialized',
-                    isDark: widget.isDark,
-                    onTap: () => setState(() => _mode = 'specialized'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 24),
-
           // Language Control
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -294,21 +264,12 @@ class _TranslateScreenState extends State<TranslateScreen> {
 
           const SizedBox(height: 24),
 
-          // Content based on mode
+          // Specialized Mode Content (Dictionary + File Upload)
           Expanded(
-            child: _mode == 'document'
-                ? _buildDocumentWorkflow()
-                : _buildSpecializedMode(),
+            child: _buildSpecializedMode(),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildDocumentWorkflow() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      child: _buildStateContent(),
     );
   }
 
@@ -632,7 +593,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Từ điển chuyên ngành',
+                  'Từ điển cục bộ',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -653,9 +614,8 @@ class _TranslateScreenState extends State<TranslateScreen> {
 
         const SizedBox(height: 16),
 
-        // Conditional: Upload or AI box
+        // Conditional: Upload (Local/Offline) or AI Auto (Online) box
         Container(
-          height: 80,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: _useCustomDict
@@ -678,98 +638,121 @@ class _TranslateScreenState extends State<TranslateScreen> {
             ),
           ),
           child: _useCustomDict
-              ? Row(
+              // Switch ON: Local Mode (Offline) - Show File Picker
+              ? Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    FaIcon(
-                      FontAwesomeIcons.upload,
-                      size: 18,
-                      color:
-                          widget.isDark ? Colors.white : AppColors.lightPrimary,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            _selectedDictionaryPath != null
-                                ? path.basename(_selectedDictionaryPath!)
-                                : 'Tải lên từ điển của bạn',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: widget.isDark
-                                  ? Colors.grey[200]
-                                  : Colors.grey[800],
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        FaIcon(
+                          FontAwesomeIcons.upload,
+                          size: 18,
+                          color: widget.isDark
+                              ? Colors.white
+                              : AppColors.lightPrimary,
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _selectedDictionaryPath != null
+                                    ? path.basename(_selectedDictionaryPath!)
+                                    : 'Tải lên từ điển của bạn',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: widget.isDark
+                                      ? Colors.grey[200]
+                                      : Colors.grey[800],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                _selectedDictionaryPath != null
+                                    ? 'Đã chọn'
+                                    : '.CSV',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: widget.isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[500],
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
+                        ),
+                        OutlinedButton(
+                          onPressed: () async {
+                            try {
+                              final result =
+                                  await FilePicker.platform.pickFiles(
+                                type: FileType.custom,
+                                allowedExtensions: ['csv'],
+                              );
+
+                              if (result != null &&
+                                  result.files.single.path != null) {
+                                setState(() {
+                                  _selectedDictionaryPath =
+                                      result.files.single.path;
+                                });
+                              }
+                            } catch (e) {
+                              debugPrint("Error picking dictionary: $e");
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Lỗi chọn file: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: widget.isDark
+                                  ? Colors.grey[500]!
+                                  : Colors.grey[300]!,
+                            ),
+                            backgroundColor: widget.isDark
+                                ? Colors.transparent
+                                : Colors.white,
+                          ),
+                          child: Text(
                             _selectedDictionaryPath != null
-                                ? 'Đã chọn'
-                                : '.CSV',
+                                ? 'Thay đổi'
+                                : 'Chọn file',
                             style: TextStyle(
                               fontSize: 12,
                               color: widget.isDark
-                                  ? Colors.grey[400]
-                                  : Colors.grey[500],
+                                  ? Colors.grey[300]
+                                  : Colors.grey[600],
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    OutlinedButton(
-                      onPressed: () async {
-                        try {
-                          final result = await FilePicker.platform.pickFiles(
-                            type: FileType.custom,
-                            allowedExtensions: ['csv'],
-                          );
-
-                          if (result != null &&
-                              result.files.single.path != null) {
-                            setState(() {
-                              _selectedDictionaryPath =
-                                  result.files.single.path;
-                            });
-                          }
-                        } catch (e) {
-                          debugPrint("Error picking dictionary: $e");
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Lỗi chọn file: $e'),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
-                          }
-                        }
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: widget.isDark
-                              ? Colors.grey[500]!
-                              : Colors.grey[300]!,
-                        ),
-                        backgroundColor:
-                            widget.isDark ? Colors.transparent : Colors.white,
-                      ),
-                      child: Text(
-                        _selectedDictionaryPath != null
-                            ? 'Thay đổi'
-                            : 'Chọn file',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: widget.isDark
-                              ? Colors.grey[300]
-                              : Colors.grey[600],
-                        ),
+                    const SizedBox(height: 8),
+                    // Hint text for Local Mode
+                    Text(
+                      'Nếu không tải lên từ điển, mặc định AI sẽ tự tạo mới từ điển cục bộ (không dùng Internet).',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic,
+                        color: widget.isDark
+                            ? Colors.grey[500]
+                            : Colors.grey[600],
                       ),
                     ),
                   ],
                 )
+              // Switch OFF: Internet Mode (Online) - Show AI Auto status
               : Row(
                   children: [
                     Container(
@@ -798,7 +781,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            'AI Tự động tạo từ điển',
+                            'AI Tự động (Online)',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
@@ -808,7 +791,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
                             ),
                           ),
                           Text(
-                            'Hệ thống sẽ tự động phân tích tài liệu và trích xuất thuật ngữ chuyên ngành.',
+                            'Hệ thống có quyền truy cập internet để hoàn thành từ điển.',
                             style: TextStyle(
                               fontSize: 12,
                               color: widget.isDark
@@ -838,61 +821,4 @@ class _TranslateScreenState extends State<TranslateScreen> {
   }
 }
 
-class _ModeButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final bool isActive;
-  final bool isDark;
-  final VoidCallback onTap;
 
-  const _ModeButton({
-    required this.icon,
-    required this.label,
-    required this.isActive,
-    required this.isDark,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        decoration: BoxDecoration(
-          color: isActive
-              ? (isDark ? Colors.white : Colors.white)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            FaIcon(
-              icon,
-              size: 12,
-              color: isActive
-                  ? (isDark ? Colors.black : AppColors.lightPrimary)
-                  : (isDark
-                      ? Colors.grey[400]
-                      : AppColors.lightPrimary.withValues(alpha: 0.6)),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: isActive
-                    ? (isDark ? Colors.black : AppColors.lightPrimary)
-                    : (isDark
-                        ? Colors.grey[400]
-                        : AppColors.lightPrimary.withValues(alpha: 0.6)),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
