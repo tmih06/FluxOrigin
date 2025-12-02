@@ -12,18 +12,65 @@ class TranslationController {
   final AIService _aiService = AIService();
   final WebSearchService _webSearchService = WebSearchService();
 
+  // Pause control
+  bool _isPaused = false;
+
+  /// Request to pause the translation after the current chunk
+  void requestPause() {
+    _isPaused = true;
+  }
+
+  /// Reset pause state (call before starting/resuming)
+  void resetPause() {
+    _isPaused = false;
+  }
+
+  /// Check if a progress file exists for the given document
+  /// Returns progress percentage (0.0 to 1.0) if exists, null otherwise
+  Future<double?> getProgressPercentage(String filePath, String dictionaryDir) async {
+    final String fileName = path.basenameWithoutExtension(filePath);
+    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final progress = await TranslationProgress.loadFromFile(progressPath);
+    if (progress == null) return null;
+    if (progress.rawChunks.isEmpty) return null;
+    return progress.currentIndex / progress.rawChunks.length;
+  }
+
+  /// Check if a progress file exists for the given document
+  Future<bool> hasProgress(String filePath, String dictionaryDir) async {
+    final String fileName = path.basenameWithoutExtension(filePath);
+    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final File progressFile = File(progressPath);
+    return await progressFile.exists();
+  }
+
+  /// Delete progress file for the given document
+  Future<void> deleteProgress(String filePath, String dictionaryDir) async {
+    final String fileName = path.basenameWithoutExtension(filePath);
+    final String progressPath = path.join(dictionaryDir, "$fileName.flux_progress.json");
+    final File progressFile = File(progressPath);
+    if (await progressFile.exists()) {
+      await progressFile.delete();
+    }
+  }
+
   /// Processes the file with resume capability.
   /// [onUpdate] callback returns status message and progress (0.0 to 1.0).
   /// [allowInternet] controls whether web search (RAG) is used for glossary enrichment.
-  /// Returns the translated content as a String.
-  Future<String> processFile({
+  /// [resume] if true and progress exists, resume from saved state; if false, start fresh.
+  /// Returns the translated content as a String, or null if paused.
+  Future<String?> processFile({
     required String filePath,
     required String dictionaryDir,
     required String modelName,
     required String targetLanguage,
     required Function(String status, double progress) onUpdate,
     required bool allowInternet,
+    bool resume = false,
   }) async {
+    // Reset pause state at start
+    _isPaused = false;
+
     final String fileName = path.basenameWithoutExtension(filePath);
     final String progressPath =
         path.join(dictionaryDir, "$fileName.flux_progress.json");
@@ -31,10 +78,19 @@ class TranslationController {
         await TranslationProgress.loadFromFile(progressPath);
 
     // --- 1. INITIALIZATION OR RESUME ---
-    if (progress != null) {
-      onUpdate("Đã tìm thấy bản lưu cũ. Đang khôi phục tiến độ...", 0.0);
+    if (progress != null && resume) {
+      onUpdate("Đã tìm thấy bản lưu cũ. Đang khôi phục tiến độ...", 
+          progress.currentIndex / progress.rawChunks.length);
       await Future.delayed(const Duration(seconds: 1)); // UX delay
     } else {
+      // If not resuming or no progress, delete old progress and start fresh
+      if (progress != null && !resume) {
+        final File progressFile = File(progressPath);
+        if (await progressFile.exists()) {
+          await progressFile.delete();
+        }
+        progress = null;
+      }
       onUpdate("Đang đọc file gốc...", 0.0);
       final File file = File(filePath);
       if (!await file.exists()) {
@@ -121,6 +177,13 @@ class TranslationController {
     }
 
     for (int i = progress.currentIndex; i < total; i++) {
+      // Check for pause request BEFORE processing next chunk
+      if (_isPaused) {
+        onUpdate("Đã tạm dừng. Tiến độ đã được lưu.", i / total);
+        await progress.saveToFile(progressPath);
+        return null; // Return null to indicate paused state
+      }
+
       final double percent = (i / total);
       onUpdate("Đang dịch đoạn ${i + 1}/$total...", percent);
 

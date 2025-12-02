@@ -38,6 +38,10 @@ class _TranslateScreenState extends State<TranslateScreen> {
   double _progress = 0.0;
   String _statusMessage = "";
 
+  // Resume state
+  bool _hasExistingProgress = false;
+  double _existingProgressPercent = 0.0;
+
   final List<String> _allLanguages = ['Tiếng Anh', 'Tiếng Trung', 'Tiếng Việt'];
 
   void _swapLanguages() {
@@ -55,17 +59,61 @@ class _TranslateScreenState extends State<TranslateScreen> {
       _translatedContent = null;
       _progress = 0.0;
       _statusMessage = "";
+      _hasExistingProgress = false;
+      _existingProgressPercent = 0.0;
     });
   }
 
-  void _onFileSelected(String filePath) {
+  void _onFileSelected(String filePath) async {
     setState(() {
       _selectedFilePath = filePath;
       _currentState = TranslationState.fileSelected;
     });
+    // Check for existing progress
+    await _checkExistingProgress();
   }
 
-  Future<void> _startTranslation() async {
+  Future<void> _checkExistingProgress() async {
+    final configProvider = context.read<ConfigProvider>();
+    if (!configProvider.isConfigured || _selectedFilePath == null) {
+      setState(() {
+        _hasExistingProgress = false;
+        _existingProgressPercent = 0.0;
+      });
+      return;
+    }
+
+    final progress = await _controller.getProgressPercentage(
+      _selectedFilePath!,
+      configProvider.dictionaryDir,
+    );
+
+    if (mounted) {
+      setState(() {
+        _hasExistingProgress = progress != null;
+        _existingProgressPercent = progress ?? 0.0;
+      });
+    }
+  }
+
+  Future<void> _deleteProgress() async {
+    final configProvider = context.read<ConfigProvider>();
+    if (!configProvider.isConfigured || _selectedFilePath == null) return;
+
+    await _controller.deleteProgress(
+      _selectedFilePath!,
+      configProvider.dictionaryDir,
+    );
+
+    if (mounted) {
+      setState(() {
+        _hasExistingProgress = false;
+        _existingProgressPercent = 0.0;
+      });
+    }
+  }
+
+  Future<void> _startTranslation({bool resume = false}) async {
     final configProvider = context.read<ConfigProvider>();
 
     if (!configProvider.isConfigured) {
@@ -78,7 +126,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: BorderSide(color: Colors.red.withOpacity(0.5)),
+            side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
           ),
           backgroundColor: widget.isDark ? AppColors.darkSurface : Colors.white,
           margin: const EdgeInsets.all(16),
@@ -92,8 +140,8 @@ class _TranslateScreenState extends State<TranslateScreen> {
 
     setState(() {
       _currentState = TranslationState.processing;
-      _progress = 0.0;
-      _statusMessage = "Đang khởi tạo...";
+      _progress = resume ? _existingProgressPercent : 0.0;
+      _statusMessage = resume ? "Đang tiếp tục dịch..." : "Đang khởi tạo...";
     });
 
     // Switch ON = Local Mode (Offline) -> allowInternet: false
@@ -107,6 +155,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
         modelName: configProvider.selectedModel,
         targetLanguage: _targetLang,
         allowInternet: allowInternet,
+        resume: resume,
         onUpdate: (status, progress) {
           if (mounted) {
             setState(() {
@@ -118,14 +167,27 @@ class _TranslateScreenState extends State<TranslateScreen> {
       );
 
       if (mounted) {
-        setState(() {
-          _translatedContent = result;
-          _currentState = TranslationState.finished;
-          _progress = 1.0;
-        });
+        // result is null if paused
+        if (result == null) {
+          // Paused - go back to file selected state
+          await _checkExistingProgress();
+          setState(() {
+            _currentState = TranslationState.fileSelected;
+          });
+        } else {
+          // Completed
+          setState(() {
+            _translatedContent = result;
+            _currentState = TranslationState.finished;
+            _progress = 1.0;
+            _hasExistingProgress = false;
+            _existingProgressPercent = 0.0;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
+        await _checkExistingProgress();
         setState(() {
           _currentState = TranslationState.fileSelected; // Go back to selected
           _statusMessage = "Lỗi: $e";
@@ -139,7 +201,7 @@ class _TranslateScreenState extends State<TranslateScreen> {
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
-              side: BorderSide(color: Colors.red.withOpacity(0.5)),
+              side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
             ),
             backgroundColor:
                 widget.isDark ? AppColors.darkSurface : Colors.white,
@@ -149,6 +211,13 @@ class _TranslateScreenState extends State<TranslateScreen> {
         );
       }
     }
+  }
+
+  void _requestPause() {
+    _controller.requestPause();
+    setState(() {
+      _statusMessage = "Đang tạm dừng sau đoạn hiện tại...";
+    });
   }
 
   Future<void> _saveResult() async {
@@ -297,6 +366,8 @@ class _TranslateScreenState extends State<TranslateScreen> {
         ? path.basename(_selectedFilePath!)
         : "Unknown File";
 
+    final int progressPercent = (_existingProgressPercent * 100).toInt();
+
     return Center(
       child: Container(
         constraints: const BoxConstraints(maxWidth: 400),
@@ -355,20 +426,52 @@ class _TranslateScreenState extends State<TranslateScreen> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: Text(
-                      fileName,
-                      style: TextStyle(
-                        fontFamily: 'Merriweather',
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                        color: widget.isDark
-                            ? Colors.white
-                            : AppColors.lightPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fileName,
+                          style: TextStyle(
+                            fontFamily: 'Merriweather',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: widget.isDark
+                                ? Colors.white
+                                : AppColors.lightPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_hasExistingProgress)
+                          Text(
+                            'Tiến độ: $progressPercent%',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: widget.isDark
+                                  ? Colors.green[300]
+                                  : Colors.green[700],
+                            ),
+                          ),
+                      ],
                     ),
                   ),
+                  // Delete progress button (only show if progress exists)
+                  if (_hasExistingProgress)
+                    IconButton(
+                      onPressed: _deleteProgress,
+                      icon: FaIcon(
+                        FontAwesomeIcons.trash,
+                        size: 14,
+                        color: Colors.red[400],
+                      ),
+                      tooltip: 'Xóa tiến độ và bắt đầu lại',
+                      style: IconButton.styleFrom(
+                        backgroundColor: widget.isDark
+                            ? Colors.red.withValues(alpha: 0.1)
+                            : Colors.red.withValues(alpha: 0.1),
+                        shape: const CircleBorder(),
+                      ),
+                    ),
                   IconButton(
                     onPressed: _reset,
                     icon: FaIcon(
@@ -389,11 +492,24 @@ class _TranslateScreenState extends State<TranslateScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Start Button
+            // Start/Resume Button
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _startTranslation,
+              child: ElevatedButton.icon(
+                onPressed: () => _startTranslation(resume: _hasExistingProgress),
+                icon: _hasExistingProgress
+                    ? const FaIcon(FontAwesomeIcons.play, size: 14)
+                    : const SizedBox.shrink(),
+                label: Text(
+                  _hasExistingProgress
+                      ? 'TIẾP TỤC DỊCH - $progressPercent%'
+                      : 'BẮT ĐẦU DỊCH',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 1,
+                  ),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
                       widget.isDark ? Colors.white : AppColors.lightPrimary,
@@ -404,16 +520,26 @@ class _TranslateScreenState extends State<TranslateScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'BẮT ĐẦU DỊCH',
+              ),
+            ),
+
+            // Start Fresh button (only show if progress exists)
+            if (_hasExistingProgress) ...[
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () async {
+                  await _deleteProgress();
+                  _startTranslation(resume: false);
+                },
+                child: Text(
+                  'Bắt đầu lại từ đầu',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 1,
+                    fontSize: 12,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
                   ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ).animate().scale(duration: 200.ms, curve: Curves.easeOut),
@@ -473,17 +599,45 @@ class _TranslateScreenState extends State<TranslateScreen> {
               ),
             ),
             const SizedBox(height: 32),
-            TextButton(
-              onPressed: () {
-                // TODO: Implement actual cancellation logic in controller
-                _reset();
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: const Text("Hủy bỏ"),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Pause Button
+                ElevatedButton.icon(
+                  onPressed: _requestPause,
+                  icon: const FaIcon(FontAwesomeIcons.pause, size: 14),
+                  label: const Text("Tạm dừng"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: widget.isDark
+                        ? Colors.orange.withValues(alpha: 0.2)
+                        : Colors.orange.withValues(alpha: 0.1),
+                    foregroundColor: Colors.orange,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      side: BorderSide(
+                        color: Colors.orange.withValues(alpha: 0.5),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                // Cancel Button
+                TextButton(
+                  onPressed: () {
+                    _controller.requestPause();
+                    _reset();
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 24, vertical: 12),
+                  ),
+                  child: const Text("Hủy bỏ"),
+                ),
+              ],
             ),
           ],
         ),
