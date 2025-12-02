@@ -33,7 +33,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   final AIService _aiService = AIService();
   List<String> _installedModels = [];
-  Map<String, bool> _downloadingStates = {};
+  Map<String, double?> _downloadProgress = {};
 
   @override
   void initState() {
@@ -56,17 +56,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _downloadModel(String uiName) async {
     setState(() {
-      _downloadingStates[uiName] = true;
+      _downloadProgress[uiName] = 0.0;
     });
 
     final ollamaName = _getOllamaModelName(uiName);
     final success = await _aiService.pullModel(ollamaName, (progress) {
-      // Optional: Handle progress update if needed
+      if (mounted) {
+        setState(() {
+          _downloadProgress[uiName] = progress;
+        });
+      }
     });
 
     if (mounted) {
       setState(() {
-        _downloadingStates[uiName] = false;
+        _downloadProgress[uiName] = null;
       });
 
       if (success) {
@@ -260,7 +264,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       final isSelected = model == configProvider.selectedModel;
                       final ollamaName = _getOllamaModelName(model);
                       final isInstalled = _installedModels.contains(ollamaName);
-                      final isDownloading = _downloadingStates[model] == true;
+                      final isDownloading = _downloadProgress[model] != null;
 
                       return InkWell(
                         onTap: () {
@@ -304,11 +308,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 ),
                               ),
                               if (isDownloading)
-                                const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child:
-                                      CircularProgressIndicator(strokeWidth: 2),
+                                Expanded(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(left: 16),
+                                    child: LinearProgressIndicator(
+                                      value: _downloadProgress[model],
+                                      minHeight: 6,
+                                      borderRadius: BorderRadius.circular(4),
+                                      color: widget.isDark
+                                          ? const Color(0xFF4CAF50)
+                                          : AppColors.lightPrimary,
+                                      backgroundColor: widget.isDark
+                                          ? Colors.white.withValues(alpha: 0.1)
+                                          : Colors.grey[200],
+                                    ),
+                                  ),
                                 )
                               else if (!isInstalled)
                                 IconButton(
