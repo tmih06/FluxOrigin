@@ -6,17 +6,17 @@ class WebSearchService {
   /// Tra cứu định nghĩa thuật ngữ.
   /// Ưu tiên 1: Wikipedia API
   /// Ưu tiên 2: DuckDuckGo (Scraping)
-  Future<String?> lookupTerm(String term) async {
+  Future<String?> lookupTerm(String term, String langCode) async {
     if (term.trim().isEmpty) return null;
 
     // 1. Wikipedia Lookup
     try {
-      final wikiDefinition = await _lookupWikipedia(term);
+      final wikiDefinition = await _lookupWikipedia(term, langCode);
       if (wikiDefinition != null && wikiDefinition.isNotEmpty) {
         return wikiDefinition;
       }
     } catch (e) {
-      print("Wikipedia lookup failed for '$term': $e");
+      print("Wikipedia lookup failed for '$term' ($langCode): $e");
     }
 
     // 2. DuckDuckGo Lookup (Fallback)
@@ -32,11 +32,11 @@ class WebSearchService {
     return null;
   }
 
-  Future<String?> _lookupWikipedia(String term) async {
+  Future<String?> _lookupWikipedia(String term, String langCode) async {
     // Encode term for URL (e.g., spaces to %20)
     final encodedTerm = Uri.encodeComponent(term);
     final url = Uri.parse(
-        'https://en.wikipedia.org/api/rest_v1/page/summary/$encodedTerm');
+        'https://$langCode.wikipedia.org/api/rest_v1/page/summary/$encodedTerm');
 
     final response = await http.get(url);
 

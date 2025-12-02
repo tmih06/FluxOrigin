@@ -144,6 +144,7 @@ class TranslationController {
         onUpdate("Đang tra cứu thuật ngữ (RAG)...", 0.35);
         glossary = await _enrichGlossary(
           glossaryFile: glossaryFile,
+          targetLanguage: targetLanguage,
           onUpdate: onUpdate,
         );
       } else {
@@ -381,6 +382,7 @@ class TranslationController {
   /// Enriches the glossary by looking up definitions for terms
   Future<String> _enrichGlossary({
     required File glossaryFile,
+    required String targetLanguage,
     required Function(String, double) onUpdate,
   }) async {
     if (!await glossaryFile.exists()) return "";
@@ -415,7 +417,9 @@ class TranslationController {
           onUpdate(
               "Đang tra cứu: $original...", 0.35 + (0.05 * (i / totalRows)));
 
-          final String? result = await _webSearchService.lookupTerm(original);
+          final langCode = _getLangCode(targetLanguage);
+          final String? result =
+              await _webSearchService.lookupTerm(original, langCode);
           if (result != null) {
             row[2] =
                 result; // ListToCsvConverter will handle escaping quotes/commas
@@ -439,6 +443,19 @@ class TranslationController {
       print("Error enriching glossary: $e");
       // Return original content if enrichment fails to avoid data loss
       return await glossaryFile.readAsString();
+    }
+  }
+
+  String _getLangCode(String languageName) {
+    switch (languageName) {
+      case 'Tiếng Việt':
+        return 'vi';
+      case 'Tiếng Anh':
+        return 'en';
+      case 'Tiếng Trung':
+        return 'zh';
+      default:
+        return 'en'; // Mặc định là Anh
     }
   }
 }
