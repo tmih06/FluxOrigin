@@ -949,35 +949,23 @@ class _TranslateScreenState extends State<TranslateScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _reportContent,
-                icon: Icon(
-                  Icons.flag_outlined,
-                  size: 18,
-                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
-                label: Text(
-                  'Report inappropriate content',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(
-                    color: widget.isDark ? Colors.grey[600]! : Colors.grey[300]!,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _reportContent,
+              icon: Icon(
+                Icons.flag_outlined,
+                size: 16,
+                color: widget.isDark ? Colors.grey[500] : Colors.grey[500],
+              ),
+              label: Text(
+                'Report inappropriate content',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: widget.isDark ? Colors.grey[500] : Colors.grey[500],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             TextButton(
               onPressed: _reset,
               style: TextButton.styleFrom(
